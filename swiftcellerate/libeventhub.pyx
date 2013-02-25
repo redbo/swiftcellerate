@@ -1,10 +1,10 @@
 import sys
 import traceback
-import collections
 
 from eventlet.support import greenlets
 from eventlet.hubs.hub import BaseHub, READ, WRITE
 import eventlet.hubs
+
 
 __version__ = '0.1'
 
@@ -44,7 +44,6 @@ cdef void event_callback(int fd, short evtype, void *arg) with gil:
     cdef object evt = <object>arg
     evt()
 
-event_pool = collections.deque()
 
 cdef class Event:
     cdef event ev
@@ -90,10 +89,10 @@ cdef class Event:
     def cancel(self):
         if self.cancelled == 0:
             event_del(&self.ev)
-            Py_DECREF(self)
             if self._evtype in (EV_READ, EV_WRITE):
                 self.hub.listeners[self.evtype].pop(self.fileno, None)
             self.cancelled = 1
+            Py_DECREF(self)
 
     @property
     def evtype(self):
@@ -133,10 +132,7 @@ cdef class EventBase:
     def new_event(self, callback, arg, short evtype, handle=-1,
                  seconds=None):
         cdef Event evt
-        if len(event_pool) > 10:
-            evt = event_pool.popleft()
-        else:
-            evt = Event()
+        evt = Event()
         evt.add(self._base, callback, arg, evtype, handle, seconds, self)
         return evt
 
