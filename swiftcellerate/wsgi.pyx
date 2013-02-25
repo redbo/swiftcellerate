@@ -208,8 +208,6 @@ cdef class ConnectionHandler:
             self.nodelay()
             self.send('HTTP/1.1 100 Continue\r\n\r\n')
             self.expect = 0
-        cdef char size_line[256]
-        cdef int size_line_len
         if length is None:
             resp = []
             chunk = True
