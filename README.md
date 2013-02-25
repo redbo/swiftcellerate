@@ -3,9 +3,9 @@ dependencies and internals that are known to be slow with compiled/optimized
 versions.
 
 Currently includes:
-* tpool
 * libevent-based eventlet hub
-* wsgi server
+* faster wsgi server with sendfile() support
+* faster tpool
 
 It includes some middleware that will monkey patch all of the optimizations
 into place.  Just add this to a .conf file:
