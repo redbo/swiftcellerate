@@ -1,0 +1,6 @@
+*.pyc
+swiftcellerate.egg-info/*
+deb_dist/*
+.coverage
+build/*
+*.so
