@@ -10,7 +10,7 @@ Currently includes:
 It includes some middleware that will monkey patch all of the optimizations
 into place.  Just add this to a .conf file:
 
-[filter:swiftcellerate]
-use = egg:swiftcellerate#swiftcellerate
+    [filter:swiftcellerate]
+    use = egg:swiftcellerate#swiftcellerate
 
 Then add "swiftcellerate" to the pipeline.
