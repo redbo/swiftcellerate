@@ -8,7 +8,7 @@ try:
     libeventhub = Extension('swiftcellerate.libeventhub', ['swiftcellerate/libeventhub.pyx'], libraries=['event'])
 except ImportError:
     cmdclass = {}
-    wsgi = Extension('swiftcellerate.wsgi', ['swiftcellerate/wsgi'], libraries=[])
+    wsgi = Extension('swiftcellerate.wsgi', ['swiftcellerate/wsgi.c'], libraries=[])
     libeventhub = Extension('swiftcellerate.libeventhub', ['swiftcellerate/libeventhub.c'], libraries=['event'])
 
 setup(
@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
         ],
         'paste.filter_factory': [
+            'swiftcellerate=swiftcellerate.middleware:filter_factory',
         ],
     },
 )

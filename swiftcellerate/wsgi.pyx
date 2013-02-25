@@ -14,6 +14,11 @@ from swiftcellerate import tpool
 MAX_TOKEN_SIZE = 64
 MAX_URL_SIZE = 1024 * 8
 MAX_HEADER_SIZE = 1024 * 8
+WRITE_TIMEOUT = 600
+# support swift's monkey patching
+class FakeProtocol(object):
+    pass
+HttpProtocol = FakeProtocol()
 
 
 cdef extern from *:
