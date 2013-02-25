@@ -81,9 +81,8 @@ _environ_template = {
     'wsgi.run_once': False,
     'wsgi.url_scheme': 'http',
     'wsgi.file_wrapper': FileWrapper,
-    'fastserver.client_disconnect': ClientDisconnectError,
-    'fastserver.drop_connection': DropConnection,
-    'fastserver.x_sendfile': True,
+    'swiftcellerate.client_disconnect': ClientDisconnectError,
+    'swiftcellerate.drop_connection': DropConnection,
     'SCRIPT_NAME': '',
 }
 
