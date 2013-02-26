@@ -1,5 +1,6 @@
 import sys
 import traceback
+import collections
 
 from eventlet.support import greenlets
 from eventlet.hubs.hub import BaseHub, READ, WRITE
@@ -14,6 +15,7 @@ cdef extern from *:
 cdef extern from "Python.h":
     void Py_INCREF(object)
     void Py_DECREF(object)
+    int Py_REFCNT(object)
 
 cdef extern from 'sys/time.h':
     struct timeval:
@@ -40,12 +42,11 @@ cdef extern from "event.h":
     int EVLOOP_ONCE, EVLOOP_NONBLOCK
     int EV_TIMEOUT, EV_READ, EV_WRITE, EV_SIGNAL, EV_PERSIST
 
-event_pool = []
+event_pool = collections.deque(maxlen=1024)
 
 cdef void event_callback(int fd, short evtype, void *arg) with gil:
     cdef object evt = <object>arg
     evt()
-    event_pool.append(evt)
 
 
 cdef class Event:
@@ -85,12 +86,12 @@ cdef class Event:
         except:
             self.hub.async_exception_occurred()
         finally:
-            self.cancel()
+            self.cancel(True)
 
     def pending(self):
         return event_pending(&self.ev, EV_TIMEOUT | EV_SIGNAL | EV_READ | EV_WRITE, NULL)
 
-    def cancel(self):
+    def cancel(self, keep=True):
         if self._evtype & EV_PERSIST:
             return
         if self.cancelled == 0:
@@ -99,6 +100,7 @@ cdef class Event:
                 self.hub.listeners[self.evtype].pop(self.fileno, None)
             self.cancelled = 1
             Py_DECREF(self)
+            event_pool.append(self)
 
     @property
     def evtype(self):
@@ -126,22 +128,23 @@ cdef class EventBase:
     def __dealloc__(self):
         event_base_free(self._base)
 
-    def event_loop(self):
+    cpdef event_loop(self):
         cdef int response
         with nogil:
             response = event_base_loop(self._base, EVLOOP_ONCE)
         return response
 
-    def abort_loop(self):
+    cpdef abort_loop(self):
         event_base_loopbreak(self._base)
 
-    def new_event(self, callback, arg, short evtype, handle=-1,
+    cdef Event _get_event(self):
+        if event_pool and Py_REFCNT(event_pool[0]) == 2:
+            return event_pool.popleft()
+        return Event()
+
+    cpdef new_event(self, callback, arg, short evtype, handle=-1,
                  seconds=None):
-        cdef Event evt
-        if event_pool:
-            evt = event_pool.pop()
-        else:
-            evt = Event()
+        cdef Event evt = self._get_event()
         evt.add(self._base, callback, arg, evtype, handle, seconds, self)
         return evt
 
@@ -206,7 +209,7 @@ class Hub(EventBase, BaseHub):
         return evt
 
     def remove(self, listener):
-        listener.cancel()
+        listener.cancel(False)
 
     def remove_descriptor(self, fileno):
         for lcontainer in self.listeners.itervalues():
@@ -218,7 +221,7 @@ class Hub(EventBase, BaseHub):
                 except:
                     traceback.print_exc()
 
-    def signal_wrapper(self, signalnum, handler):
+    def _signal_wrapper(self, signalnum, handler):
         try:
             handler(signalnum, None)
         except:
@@ -226,7 +229,7 @@ class Hub(EventBase, BaseHub):
             self.abort_loop()
 
     def signal(self, signalnum, handler):
-        evt = self.new_event(self.signal_wrapper, (signalnum, handler),
+        evt = self.new_event(self._signal_wrapper, (signalnum, handler),
                              EV_SIGNAL | EV_PERSIST, signalnum)
         return evt
 
