@@ -138,8 +138,11 @@ cdef class EventBase:
         event_base_loopbreak(self._base)
 
     cdef Event _get_event(self):
-        if event_pool and Py_REFCNT(event_pool[0]) == 2:
-            return event_pool.popleft()
+        cdef Event evt
+        while event_pool:
+            evt = event_pool.popleft()
+            if Py_REFCNT(evt) == 1:
+                return evt
         return Event()
 
     cpdef new_event(self, callback, arg, short evtype, handle=-1,
