@@ -40,10 +40,12 @@ cdef extern from "event.h":
     int EVLOOP_ONCE, EVLOOP_NONBLOCK
     int EV_TIMEOUT, EV_READ, EV_WRITE, EV_SIGNAL, EV_PERSIST
 
+event_pool = []
 
 cdef void event_callback(int fd, short evtype, void *arg) with gil:
     cdef object evt = <object>arg
     evt()
+    event_pool.append(evt)
 
 
 cdef class Event:
@@ -136,7 +138,10 @@ cdef class EventBase:
     def new_event(self, callback, arg, short evtype, handle=-1,
                  seconds=None):
         cdef Event evt
-        evt = Event()
+        if event_pool:
+            evt = event_pool.pop()
+        else:
+            evt = Event()
         evt.add(self._base, callback, arg, evtype, handle, seconds, self)
         return evt
 

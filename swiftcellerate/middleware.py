@@ -21,7 +21,8 @@ def filter_factory(global_conf, **local_conf):
         swift.common.wsgi.wsgi = wsgi
         swift.common.utils.get_hub = get_hub
         swift.obj.server.tpool = tpool
-        swift.obj.server.os = OS
+#        swift.obj.server.os = OS
+# not there yet...
 #        __builtins__['file'] = fileio.File
 #        __builtins__['open'] = fileio.File
 #        os.read = fileio.os_read

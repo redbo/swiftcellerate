@@ -1,3 +1,4 @@
+import os
 import struct
 import eventlet.hubs
 from eventlet.support import greenlets as greenlet
@@ -86,6 +87,7 @@ cdef class FileHub:
     def _eventfire(self, *args):
         cdef char retval[8]
         self.hub.remove(self.hub_listener)
+        read(self.evfd, retval, sizeof(retval))
         cdef io_event events[256]
         cdef int count = io_getevents(self.ctx, 1, 256, events, NULL)
         cdef object cbdata
@@ -94,7 +96,6 @@ cdef class FileHub:
             switcher = cbdata[0]
             cbdata[:] = [events[x].res, events[x].res2]
             switcher()
-        read(self.evfd, retval, sizeof(retval))
         self.hub_listener = self.hub.add(self.hub.READ, self.evfd, self._eventfire)
 
     cdef _execute(self, IOCB cb):
@@ -157,7 +158,17 @@ cdef class File(bufferedio.BufferedIO):
         self.pos = lseek(self.fd, 0, SEEK_CUR)
 
     cdef _fdread(self, char *buf, int length):
-        return get_hub().pread(self.fd, buf, self.pos, length)
+        cdef int retval = get_hub().pread(self.fd, buf, self.pos, length)
+        self.pos += retval
+        return retval
+
+    def readlines(self):
+        lines = []
+        line = self.readline()
+        while line:
+            lines.append(line)
+            line = self.readline()
+        return lines
 
     def __enter__(self):
         return self
@@ -177,8 +188,14 @@ cdef class File(bufferedio.BufferedIO):
     def tell(self):
         return self.pos
 
-    def seek(self, loc):
-        self.pos = loc
+    def seek(self, loc, whence=0):
+        if whence == 0:
+            self.pos = loc
+        elif whence == 1:
+            self.pos += loc
+        elif whence == 2:
+            statinfo = os.fstat(self.fd)
+            self.pos = statinfo.st_size - loc
 
     def close(self):
         close(self.fd)

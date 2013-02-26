@@ -8,6 +8,13 @@ cdef extern from 'string.h' nogil:
     void *memchr(void *s, int c, size_t n)
 
 
+cdef int circ_memchr2(char *haystack, char needle, int hsize, int hstart, int hlen):
+    cdef int pos = 0
+    for pos in xrange(hlen):
+        if haystack[(hstart + pos) % hsize] == needle:
+            return pos
+    return -1
+
 cdef int circ_memchr(char *haystack, char needle, int hsize, int hstart, int hlen):
     cdef void *loc
     if hstart + hlen <= hsize:
@@ -56,13 +63,13 @@ cdef class BufferedIO:
 
     cpdef read_to_char(self, char search, int limit=-1):
         if limit < 0 or limit > (sizeof(self.buf) - 1):
-            limit = sizeof(self.buf) - 1
+            limit = sizeof(self.buf)
         cdef int pos = circ_memchr(self.buf, search, sizeof(self.buf),
-                                   self.buf_start, limit)
+                                   self.buf_start, self.buf_length)
         while pos < 0 and self.buf_length < limit and self.disconnected == 0:
             self._fill_buffer()
             pos = circ_memchr(self.buf, search, sizeof(self.buf),
-                              self.buf_start, limit)
+                              self.buf_start, self.buf_length)
         if pos < 0:
             retval = self.read(limit)
         else:
@@ -71,14 +78,18 @@ cdef class BufferedIO:
         return retval
 
     cpdef readline(self, int limit=-1):
-        retval = self.read_to_char('\n', limit)
-        return retval + '\n'
-
-    cpdef readline2(self, int limit=-1):
-        retval = self.read_to_char('\n', limit)
-        if retval.endswith('\r'):
-            return retval[:-1]
-        return retval
+        if limit < 0 or limit > (sizeof(self.buf) - 1):
+            limit = sizeof(self.buf)
+        cdef int pos = circ_memchr(self.buf, '\n', sizeof(self.buf),
+                                   self.buf_start, self.buf_length)
+        while pos < 0 and self.buf_length < limit and self.disconnected == 0:
+            self._fill_buffer()
+            pos = circ_memchr(self.buf, '\n', sizeof(self.buf),
+                              self.buf_start, self.buf_length)
+        if pos < 0:
+            return self.read(limit)
+        else:
+            return self.read(pos + 1)
 
     cdef _fill_buffer(self):
         cdef int readlen = -1

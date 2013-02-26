@@ -11,7 +11,6 @@ cdef class BufferedIO:
     cpdef read(self, int length=?)
     cpdef read_to_char(self, char search, int limit=?)
     cpdef readline(self, int limit=?)
-    cpdef readline2(self, int limit=?)
     cdef _fill_buffer(self)
     cdef _consume(self, int bytes)
     cdef _fdread(self, char *buf, int length)
