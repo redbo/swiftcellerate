@@ -21,7 +21,6 @@ class ThreadPool(object):
         self.threads.append(t)
 
     def execute(self, func, *args, **kwargs):
-        execfunc = lambda: func(*args, **kwargs)
         if self.in_use >= len(self.threads):
             self._launch_thread()
         self.in_use += 1
@@ -31,7 +30,7 @@ class ThreadPool(object):
             rfd, wfd = os.pipe()
         retval = []
         try:
-            self.queue.append((execfunc, wfd, retval))
+            self.queue.append((func, args, kwargs, wfd, retval))
             os.write(self.wqfd, 'X')
             trampoline(rfd, read=True)
             os.read(rfd, 1)
@@ -45,9 +44,9 @@ class ThreadPool(object):
     def _runner(self):
         while True:
             os.read(self.rqfd, 1)
-            execfunc, wfd, retval = self.queue.pop()
+            func, args, kwargs, wfd, retval = self.queue.pop()
             try:
-                retval.append(execfunc())
+                retval.append(func(*args, **kwargs))
             except BaseException, e:
                 retval.append(e)
             finally:

@@ -71,11 +71,13 @@ cdef class BufferedIO:
         return retval
 
     cpdef readline(self, int limit=-1):
-        retval = self.read_to_char('\r', limit)
-        while self.buf_length == 0 and self.disconnected == 0:
-            self._fill_buffer()
-        if self.buf_length > 0 and self.buf[self.buf_start] == '\n':
-            self._consume(1)
+        retval = self.read_to_char('\n', limit)
+        return retval + '\n'
+
+    cpdef readline2(self, int limit=-1):
+        retval = self.read_to_char('\n', limit)
+        if retval.endswith('\r'):
+            return retval[:-1]
         return retval
 
     cdef _fill_buffer(self):
