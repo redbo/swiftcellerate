@@ -49,7 +49,8 @@ cdef void event_callback(int fd, short evtype, void *arg) with gil:
 cdef class Event:
     cdef event ev
     cdef public object fileno, cb, hub
-    cdef object args, _evtype
+    cdef object args
+    cdef short _evtype
     cdef char cancelled
 
     cdef add(self, event_base *base, callback, arg=None, short evtype=0,
@@ -88,22 +89,24 @@ cdef class Event:
         return event_pending(&self.ev, EV_TIMEOUT | EV_SIGNAL | EV_READ | EV_WRITE, NULL)
 
     def cancel(self):
+        if self._evtype & EV_PERSIST:
+            return
         if self.cancelled == 0:
             event_del(&self.ev)
-            if self._evtype in (EV_READ, EV_WRITE):
+            if self._evtype & EV_READ or self._evtype & EV_WRITE:
                 self.hub.listeners[self.evtype].pop(self.fileno, None)
             self.cancelled = 1
             Py_DECREF(self)
 
     @property
     def evtype(self):
-        if self._evtype == EV_READ:
+        if self._evtype & EV_READ:
             return READ
-        elif self._evtype == EV_WRITE:
+        elif self._evtype & EV_WRITE:
             return WRITE
-        elif self._evtype == EV_TIMEOUT:
+        elif self._evtype & EV_TIMEOUT:
             return 'timeout'
-        elif self._evtype == EV_SIGNAL:
+        elif self._evtype & EV_SIGNAL:
             return 'signal'
 
 
@@ -186,11 +189,15 @@ class Hub(EventBase, BaseHub):
         pass  # exists for compatibility with BaseHub
     running = property(_getrunning, _setrunning)
 
-    def add(self, evtype, fileno, cb):
+    def add(self, evtype, fileno, cb, persist=False):
+        cdef short event_type
         if evtype is READ:
-            evt = self.new_event(cb, (fileno,), EV_READ, fileno)
+            event_type = EV_READ
         elif evtype is WRITE:
-            evt = self.new_event(cb, (fileno,), EV_WRITE, fileno)
+            event_type = EV_WRITE
+        if persist:
+            event_type &= EV_PERSIST
+        evt = self.new_event(cb, (fileno,), event_type, fileno)
         return evt
 
     def remove(self, listener):
