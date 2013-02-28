@@ -22,8 +22,7 @@ cdef extern from 'unistd.h' nogil:
     int close(int fd)
     int open(char *pathname, int flags)
     int read(int fd, void *buf, size_t count)
-    int pread(int fd, void *buf, size_t count, off_t offset)
-    int pwrite(int fd, void *buf, size_t count, off_t offset)
+    int write(int fd, void *buf, size_t count)
     off_t lseek(int fd, off_t offset, int whence)
     int SEEK_CUR
 
@@ -55,6 +54,7 @@ cdef extern from 'libaio.h':
     void io_prep_pread(iocb *iocb, int fd, void *buf, size_t count, long long offset)
     void io_prep_pwrite(iocb *iocb, int fd, void *buf, size_t count, long long offset)
     void io_prep_fsync(iocb *iocb, int fd)
+    void io_prep_fdsync(iocb *iocb, int fd)
     int io_getevents(aio_context_t ctx_id, long min_nr, long nr,
                io_event *events, timespec *timeout)
 
@@ -98,13 +98,13 @@ cdef class FileHub:
             switcher()
         self.hub_listener = self.hub.add(self.hub.READ, self.evfd, self._eventfire)
 
-    cdef _execute(self, IOCB cb):
-        io_set_eventfd(cb.cbp, self.evfd)
+    cdef _execute(self, iocb *cbp):
+        io_set_eventfd(cbp, self.evfd)
         cbdata = [greenlet.getcurrent().switch]
-        cb.cb.data = <void *>cbdata
-        cdef int retval = io_submit(self.ctx, 1, &cb.cbp)
+        cbp.data = <void *>cbdata
+        cdef int retval = io_submit(self.ctx, 1, &cbp)
         if retval <= 0:
-            raise IOSubmitError()
+            raise IOSubmitError('ERRNO %d' % -retval)
         self.hub.switch()
         if cbdata[0] < 0:
             raise IOError()
@@ -113,26 +113,23 @@ cdef class FileHub:
     cdef int pread(self, int fd, char *buf, long long offset, size_t count):
         cdef IOCB cb = IOCB()
         io_prep_pread(cb.cbp, fd, buf, count, offset)
-        try:
-            return self._execute(cb)
-        except IOSubmitError:
-            with nogil:
-                return pread(fd, buf, count, offset)
+        return self._execute(cb.cbp)
 
     cdef int pwrite(self, int fd, unsigned long offset, object txt):
         cdef int length = len(txt)
         cdef IOCB cb = IOCB()
         io_prep_pwrite(cb.cbp, fd, <char *>txt, length, offset)
-        try:
-            return self._execute(cb)
-        except IOSubmitError:
-            with nogil:
-                return pwrite(fd, <char *>txt, length, offset)
+        return self._execute(cb.cbp)
 
     cdef fsync(self, int fd):
         cdef IOCB cb = IOCB()
         io_prep_fsync(cb.cbp, fd)
-        return self._execute(cb)
+        return self._execute(cb.cbp)
+
+    cdef fdsync(self, int fd):
+        cdef IOCB cb = IOCB()
+        io_prep_fdsync(cb.cbp, fd)
+        return self._execute(cb.cbp)
 
 
 cdef FileHub get_hub():
@@ -205,7 +202,12 @@ def os_read(int fd, unsigned long length):
     cdef char *buf = <char *>malloc(length)
     cdef int rval
     try:
-        rval = get_hub().pread(fd, buf, lseek(fd, 0, SEEK_CUR), length)
+        try:
+            rval = get_hub().pread(fd, buf, lseek(fd, 0, SEEK_CUR), length)
+        except IOSubmitError:
+            with nogil:
+                rval = read(fd, buf, length)
+            return buf[0:rval]
         if rval < 0:
             return ''
         lseek(fd, rval, SEEK_CUR)
@@ -214,7 +216,20 @@ def os_read(int fd, unsigned long length):
         free(buf)
 
 def os_write(int fd, object txt):
-    cdef int wval = get_hub().pwrite(fd, lseek(fd, 0, SEEK_CUR), txt)
+    cdef int length = len(txt)
+    cdef int wval
+    try:
+        wval = get_hub().pwrite(fd, lseek(fd, 0, SEEK_CUR), txt)
+    except IOSubmitError:
+        with nogil:
+            wval = write(fd, <char *>txt, length)
+        return wval
     if wval > 0:
         lseek(fd, wval, SEEK_CUR)
     return wval
+
+def os_fsync(int fd):
+    get_hub().fsync(fd)
+
+def os_fdatasync(int fd):
+    get_hub().fsync(fd)

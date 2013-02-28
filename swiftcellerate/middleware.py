@@ -22,11 +22,14 @@ def filter_factory(global_conf, **local_conf):
         swift.common.utils.get_hub = get_hub
         swift.obj.server.tpool = tpool
 #        swift.obj.server.os = OS
+
 # not there yet...
 #        __builtins__['file'] = fileio.File
 #        __builtins__['open'] = fileio.File
 #        os.read = fileio.os_read
 #        os.write = fileio.os_write
+#        os.fsync = fileio.os_fsync
+#        os.fdatasync = fileio.os_fdatasync
         return app
     return app_returner
 
