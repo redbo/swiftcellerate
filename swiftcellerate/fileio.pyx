@@ -20,7 +20,7 @@ cdef extern from 'fcntl.h':
 cdef extern from 'unistd.h' nogil:
     ctypedef int off_t
     int close(int fd)
-    int open(char *pathname, int flags)
+    int open(char *pathname, int flags, int mode)
     int read(int fd, void *buf, size_t count)
     int write(int fd, void *buf, size_t count)
     off_t lseek(int fd, off_t offset, int whence)
@@ -145,11 +145,11 @@ cdef class File(bufferedio.BufferedIO):
 
     def __init__(self, filename, mode='r'):
         if mode.startswith('r'):
-            self.bufferedio_init(open(filename, O_RDONLY))
+            self.bufferedio_init(open(filename, O_RDONLY, 0666))
         elif mode.startswith('w'):
-            self.bufferedio_init(open(filename, O_WRONLY | O_CREAT))
+            self.bufferedio_init(open(filename, O_WRONLY | O_CREAT, 0666))
         elif mode.startswith('a'):
-            self.bufferedio_init(open(filename, O_APPEND))
+            self.bufferedio_init(open(filename, O_APPEND, 0666))
         if self.fd < 0:
             raise IOError()
         self.pos = lseek(self.fd, 0, SEEK_CUR)
