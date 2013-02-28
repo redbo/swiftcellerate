@@ -1,5 +1,5 @@
-import os
 import struct
+import os
 import eventlet.hubs
 from eventlet.support import greenlets as greenlet
 import threading
