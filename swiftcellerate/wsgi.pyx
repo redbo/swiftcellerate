@@ -337,7 +337,7 @@ cdef class ConnectionHandler:
     cdef uncork(self):
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)
 
-    def handle(self, app, sock):
+    def handle(self, app, sock, addr):
         cdef long response_length
         cdef char chunked
         cdef char keepalive
@@ -358,6 +358,8 @@ cdef class ConnectionHandler:
                 response_length = 0
                 self.status = None
                 environ = _environ_template.copy()
+                environ['REMOTE_ADDR'] = addr[0]
+                environ['REMOTE_PORT'] = addr[1]
                 environ['REQUEST_METHOD'] = self.read_to_char(' ', MAX_TOKEN_SIZE)
                 environ['RAW_PATH_INFO'] = self.read_to_char(' ', MAX_URL_SIZE)
                 environ['SERVER_PROTOCOL'] = self.readline(MAX_TOKEN_SIZE)
@@ -455,13 +457,13 @@ cdef class ConnectionHandler:
 
 
 handler_pool = []
-def handle_connection(app, sock):
+def handle_connection(app, sock, addr):
     try:
         handler = handler_pool.pop()
     except:
         handler = ConnectionHandler()
     try:
-        handler.handle(app, sock)
+        handler.handle(app, sock, addr)
     finally:
         handler_pool.append(handler)
 
@@ -473,4 +475,4 @@ def server(server_sock, app, log=None, custom_pool=None):
         pool = greenpool.GreenPool(1024)
     while True:
         sock, addr = server_sock.accept()
-        pool.spawn_n(handle_connection, app, sock)
+        pool.spawn_n(handle_connection, app, sock, addr)
